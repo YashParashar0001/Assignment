@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Live Temperature Monitor</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 40px; background: #f4f7f6; color: #333; }
+    .container { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); max-width: 600px; margin: 0 auto; }
+    h1 { margin-top: 0; font-size: 24px; border-bottom: 2px solid #eee; padding-bottom: 10px; }
+    .temp-display { font-size: 48px; font-weight: bold; text-align: center; margin: 20px 0; color: #0275d8; }
+    .controls { display: flex; gap: 10px; justify-content: center; margin-bottom: 25px; }
+    button { padding: 10px 20px; font-size: 16px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; transition: background 0.2s; }
+    .btn-up { background: #d9534f; color: white; }
+    .btn-down { background: #5cb85c; color: white; }
+    button:hover { opacity: 0.9; }
+    .console { background: #1e1e1e; color: #d4d4d4; padding: 20px; border-radius: 8px; font-family: monospace; height: 250px; overflow-y: auto; line-height: 1.6; }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <h1>Live Temperature Monitor</h1>
+    <div class="temp-display"><span id="temp-val">25</span>°C</div>
+    
+    <div class="controls">
+      <button class="btn-down" onclick="changeTemp(-5)">⬇️ -5°C</button>
+      <button class="btn-down" onclick="changeTemp(-1)">⬇️ -1°C</button>
+      <button class="btn-up" onclick="changeTemp(1)">⬆️ +1°C</button>
+      <button class="btn-up" onclick="changeTemp(5)">⬆️ +5°C</button>
+    </div>
+
+    <h3>Event Log Activity</h3>
+    <div class="console" id="log-box">
+      <p style="color: #777; margin: 0;">System initialised. Waiting for changes...</p>
+    </div>
+  </div>
+
+  <script>
+    // 1. Browser alternative to Node's EventEmitter using native EventTarget
+    class TemperatureMonitor extends EventTarget {
+      constructor(initialTemperature = 20) {
+        super();
+        this._temperature = initialTemperature;
+        this._isHigh = initialTemperature >= 40;
+      }
+      get temperature() { return this._temperature; }
+      set temperature(newTemp) {
+        const oldTemp = this._temperature;
+        this._temperature = newTemp;
+        
+        if (oldTemp !== newTemp) {
+          // CustomEvent passes structured details just like Node.js
+          this.dispatchEvent(new CustomEvent('temperatureChanged', { detail: { oldTemp, newTemp } }));
+        }
+        if (newTemp >= 40 && !this._isHigh) {
+          this._isHigh = true;
+          this.dispatchEvent(new CustomEvent('highTemperature', { detail: newTemp }));
+        } else if (newTemp < 40 && this._isHigh) {
+          this._isHigh = false;
+          this.dispatchEvent(new CustomEvent('normalTemperature', { detail: newTemp }));
+        }
+      }
+    }
+
+    // Initialize monitor
+    const monitor = new TemperatureMonitor(25);
+    const logBox = document.getElementById('log-box');
+    const tempVal = document.getElementById('temp-val');
+
+    // Helper to print logs onto the browser UI instantly
+    function addLog(message, color, isBold = false) {
+      const p = document.createElement('p');
+      p.style.color = color;
+      p.style.margin = '5px 0';
+      if (isBold) p.style.fontWeight = 'bold';
+      p.innerHTML = message;
+      logBox.appendChild(p);
+      logBox.scrollTop = logBox.scrollHeight;
+    }
+
+    // 2. Set up the event listeners (Identical strategy to Node.js .on methods)
+    monitor.addEventListener('temperatureChanged', (e) => {
+      tempVal.innerText = e.detail.newTemp;
+      addLog(`[Log] Temperature changed from <b>${e.detail.oldTemp}°C</b> to <b>${e.detail.newTemp}°C</b>`, '#d4d4d4');
+    });
+
+    monitor.addEventListener('highTemperature', (e) => {
+      addLog(`🚨 ALERT: High temperature detected! Current: ${e.detail}°C`, '#d9534f', true);
+    });
+
+    monitor.addEventListener('normalTemperature', (e) => {
+      addLog(`✅ INFO: Temperature back to normal. Current: ${e.detail}°C`, '#5cb85c', true);
+    });
+
+    // Control function wired to UI buttons
+    function changeTemp(amount) {
+      monitor.temperature = monitor.temperature + amount;
+    }
+  </script>
+</body>
+</html>
